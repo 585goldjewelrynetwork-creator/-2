@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1000">
+<title>Зачем нужен Performance Review?</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1000px;
+    height: 700px;
+    overflow: hidden;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #fff;
+  }
+
+  .container {
+    width: 1000px;
+    height: 700px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ШАПКА */
+  .header {
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+    color: #fff;
+    padding: 10px 20px;
+    flex-shrink: 0;
+    height: 58px;
+  }
+  .header h1 { font-size: 15px; font-weight: 600; }
+  .header p  { font-size: 10.5px; opacity: 0.85; margin-top: 2px; }
+
+  /* ПАНЕЛЬ С КНОПКОЙ */
+ .action-cell {
+    grid-column: 2;
+    grid-row: 4;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end; /* кнопка прижата вправо */
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1.5px dashed #e0d9f7;
+    border-radius: 7px;
+    background: #faf7ff;
+}
+
+.result-area {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1; /* занимает всё место слева от кнопки */
+    justify-content: flex-start;
+}
+  /* СЕТКА */
+  .content {
+    flex: 1;
+    padding: 6px 14px;
+    overflow: hidden;
+  }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(4, 80px);
+    gap: 5px;
+    height: 100%;
+  }
+
+  /* ПЛАШКА — базовое состояние */
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1.5px solid #e0d9f7;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: #fff;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  .option:hover:not(.done) {
+    border-color: #9333ea;
+    background: #faf7ff;
+  }
+
+  /* Выбрана до проверки */
+  .option.selected {
+    border-color: #7c3aed;
+    background: #f3edff;
+  }
+
+  .option.done { cursor: default; }
+
+  /* ПОСЛЕ ПРОВЕРКИ — только 2 цвета */
+
+  /* Зелёный: верный ответ (выбран или нет — неважно) */
+  .option.is-correct {
+    border-color: #16a34a;
+    background: #f0fdf4;
+  }
+
+  /* Красный: неверный ответ (выбран или нет — неважно) */
+  .option.is-wrong {
+    border-color: #dc2626;
+    background: #fef2f2;
+  }
+
+  /* ЧЕКБОКС */
+  .checkmark {
+    width: 16px; height: 16px; min-width: 16px;
+    border: 1.5px solid #c4b5fd;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  /* До проверки — выбран */
+  .option.selected .checkmark {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+  }
+  .option.selected .checkmark::after { content: '✓'; }
+
+  /* После проверки — зелёный */
+  .option.is-correct .checkmark {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+  }
+  .option.is-correct .checkmark::after { content: '✓'; }
+
+  /* После проверки — красный */
+  .option.is-wrong .checkmark {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+  }
+  .option.is-wrong .checkmark::after { content: '✕'; }
+
+  /* ТЕКСТ */
+  .option-content { flex: 1; min-width: 0; }
+
+  .option-text {
+    font-size: 11.5px;
+    color: #1e1b4b;
+    line-height: 1.25;
+  }
+
+  /* ОБРАТНАЯ СВЯЗЬ */
+  .feedback {
+    display: none;
+    font-size: 10px;
+    font-style: italic;
+    margin-top: 2px;
+    line-height: 1.2;
+  }
+
+  .option.is-correct .feedback {
+    display: block;
+    color: #15803d;
+  }
+
+  .option.is-wrong .feedback {
+    display: block;
+    color: #dc2626;
+  }
+
+  /* КНОПКА */
+  .btn-check {
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+    color: #fff; border: none;
+    padding: 7px 24px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .btn-check:hover    { opacity: 0.9; }
+  .btn-check:disabled { background: #c4b5fd; cursor: default; opacity: 1; }
+
+  .result-icon { font-size: 16px; flex-shrink: 0; }
+  .result-msg  { font-size: 11px; color: #4c1d95; font-weight: 500; flex: 1; line-height: 1.3; }
+
+  .score-wrap { display: none; align-items: center; gap: 6px; flex-shrink: 0; }
+  .score-wrap.visible { display: flex; }
+
+  .bar-bg {
+    width: 110px; height: 5px;
+    background: #e5e1f0; border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px; width: 0%;
+    transition: width 0.5s ease;
+  }
+  .bar-fill.ok  { background: #16a34a; }
+  .bar-fill.mid { background: #d97706; }
+  .bar-fill.bad { background: #dc2626; }
+
+  .score-text { font-size: 10.5px; font-weight: 600; color: #5b21b6; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>Зачем нужен Performance Review?</h1>
+    <p>Выберите все подходящие варианты и нажмите «Проверить»</p>
+  </div>
+
+  <div class="content">
+    <div class="options-grid">
+
+      <div class="option" data-correct="false" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Для сбора компромата на сотрудников перед массовым сокращением.</div>
+          <div class="feedback">Цель PR – развитие и удержание, а не поиск поводов для увольнений.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="true" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Связать личные цели сотрудника с целями компании.</div>
+          <div class="feedback">Именно. Когда человек видит связь между работой и результатами — он работает с большей отдачей.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="false" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Чтобы регулярно проводить аттестацию и увольнять тех, кто не сдал экзамен.</div>
+          <div class="feedback">PR – это не экзамен и не карательный инструмент, а диалог о развитии.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="true" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Снизить текучесть – люди остаются там, где их слышат и помогают расти.</div>
+          <div class="feedback">Точно. Лучше увидеть слабое место на встрече, чем на провальном проекте.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="true" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Выявить пробелы в навыках команды до того, как они станут проблемой.</div>
+          <div class="feedback">Точно. Лучше увидеть слабое место на встрече, чем на провальном проекте.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="false" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Для замены системы KPI и полного отказа от количественных показателей.</div>
+          <div class="feedback">PR не заменяет KPI, а дополняет его «мягкими» навыками, KPI остаются.</div>
+        </div>
+      </div>
+
+      <div class="option" data-correct="true" onclick="toggle(this)">
+        <span class="checkmark"></span>
+        <div class="option-content">
+          <div class="option-text">Понять, кто тянет команду вперёд, а кому нужна поддержка.</div>
+          <div class="feedback">Правильно. PR даёт руководителю объективную картину команды — и основу для кадровых решений.</div>
+        </div>
+      </div>
+    <div class="action-cell">
+    <button class="btn-check" id="checkBtn" onclick="checkAnswers()">Проверить</button>
+    <div class="result-area">
+        <span class="result-icon" id="rIcon"></span>
+        <span class="result-msg"  id="rMsg"></span>
+    </div>
+    <div class="score-wrap" id="scoreWrap">
+        <div class="bar-bg"><div class="bar-fill" id="barFill"></div></div>
+        <span class="score-text" id="scoreTxt"></span>
+    </div>
+    </div>
+    </div>
+  </div>
+
+</div>
+<script>
+  let locked = false;
+
+  function toggle(el) {
+    if (locked) return;
+    el.classList.toggle('selected');
+  }
+
+  function checkAnswers() {
+    if (locked) return;
+
+    // Проверка — ничего не выбрано
+    const selected = document.querySelectorAll('.option.selected');
+    if (selected.length === 0) {
+      document.getElementById('rMsg').textContent = '⚠️ Выберите хотя бы один вариант!';
+      return;
+    }
+
+    locked = true;
+    document.getElementById('checkBtn').disabled = true;
+
+    const opts = document.querySelectorAll('.option');
+    const totalCorrect = [...opts].filter(o => o.dataset.correct === 'true').length;
+    let hits = 0, wrongs = 0;
+
+    opts.forEach(opt => {
+      const good = opt.dataset.correct === 'true';
+      const sel  = opt.classList.contains('selected');
+      opt.classList.remove('selected');
+      opt.classList.add('done');
+      opt.removeAttribute('onclick');
+
+      if (good) {
+        opt.classList.add('is-correct'); // верный — всегда зелёный
+        if (sel) hits++;
+      } else {
+        opt.classList.add('is-wrong');   // неверный — всегда красный
+        if (sel) wrongs++;
+      }
+    });
+
+    const pct  = Math.round((hits / totalCorrect) * 100);
+    const fill = document.getElementById('barFill');
+
+    if (hits === totalCorrect && wrongs === 0) {
+      document.getElementById('rIcon').textContent = '🎉';
+      document.getElementById('rMsg').textContent  = 'Отлично! Вы точно понимаете суть Performance Review.';
+      fill.className = 'bar-fill ok';
+    } else if (wrongs === 0) {
+      document.getElementById('rIcon').textContent = '👍';
+      document.getElementById('rMsg').textContent  = 'Хорошо! Но вы нашли не все правильные ответы.';
+      fill.className = 'bar-fill mid';
+    } else if (hits === totalCorrect) {
+      document.getElementById('rIcon').textContent = '💡';
+      document.getElementById('rMsg').textContent  = 'Все верные найдены, но есть лишние ответы.';
+      fill.className = 'bar-fill mid';
+    } else {
+      document.getElementById('rIcon').textContent = '💡';
+      document.getElementById('rMsg').textContent  = 'Есть ошибки. Изучите обратную связь у каждого варианта.';
+      fill.className = 'bar-fill bad';
+    }
+
+    document.getElementById('scoreWrap').classList.add('visible');
+    document.getElementById('scoreTxt').textContent = hits + ' из ' + totalCorrect + ' верных';
+    setTimeout(() => { fill.style.width = Math.max(pct, 4) + '%'; }, 100);
+  }
+</script>
+</body>
+</html>
